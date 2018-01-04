@@ -14,7 +14,7 @@
     "utctime_updated": "2017-12-30T05:03:10.793922Z",
     "package_name": "phantom_wigle",
     "main_module": "wigle_connector.pyc",
-    "min_phantom_version": "3.0.264",
+    "min_phantom_version": "3.0.251",
     "app_wizard_version": "1.0.0",
     "configuration": {
         "api_name": {
@@ -48,7 +48,7 @@
             "description": "Get info about a WiFi SSID",
             "verbose": "",
             "type": "investigate",
-            "read_only": false,
+            "read_only": true,
             "parameters": {
                 "name": {
                     "description": "SSID",
@@ -61,10 +61,11 @@
                     "order": 0
                 },
                 "max_results": {
-                    "description": "Max results per page",
+                    "description": "Max results per page (default is 100)",
                     "data_type": "numeric",
                     "required": false,
                     "primary": false,
+                    "default": 100,
                     "order": 1
                 },
                 "page_token": {
