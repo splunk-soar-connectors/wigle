@@ -83,6 +83,13 @@ class WigleConnector(BaseConnector):
         except Exception as e:
             return RetVal(action_result.set_status(phantom.APP_ERROR, "Unable to parse JSON response. Error: {0}".format(str(e))), None)
 
+        success = resp_json.get('success', True)
+        message = resp_json.get('message', 'None')
+
+        if (not success):
+            message = "Server returned Failure. Message: {0}".format(message)
+            return RetVal(action_result.set_status(phantom.APP_ERROR, message))
+
         if 200 <= r.status_code < 399:
             return RetVal(phantom.APP_SUCCESS, resp_json)
 
@@ -154,7 +161,7 @@ class WigleConnector(BaseConnector):
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        ssid = str(uuid.uuid4())
+        ssid = str(uuid.uuid4())[:8]
         self.save_progress("Querying a randomly generated SSID name: {0} to test connectivity".format(ssid))
 
         # make rest call
