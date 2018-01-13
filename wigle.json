@@ -1,7 +1,7 @@
 {
     "appid": "41a0b155-215c-435f-987a-a14c3a1b698f",
     "name": "WiGLE",
-    "description": "Integrates with the WiGLE service to implement investigative actions",
+    "description": "This app integrates with the WiGLE service to implement investigative actions",
     "type": "information",
     "product_vendor": "WiGLE",
     "logo": "logo_wigle.svg",
