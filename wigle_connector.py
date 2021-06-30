@@ -1,14 +1,10 @@
 # --
 # File: wigle_connector.py
 #
-# Copyright (c) Phantom Cyber Corporation, 2018
+# Copyright (c) 2018-2021 Splunk Inc.
 #
-# This unpublished material is proprietary to Phantom Cyber.
-# All rights reserved. The methods and
-# techniques described herein are considered trade secrets
-# and/or confidential. Reproduction or distribution, in whole
-# or in part, is forbidden except by express written permission
-# of Phantom Cyber.
+# SPLUNK CONFIDENTIAL - Use or disclosure of this material in whole or in part
+# without a valid written license from Splunk Inc. is PROHIBITED.
 #
 # --
 
@@ -86,7 +82,7 @@ class WigleConnector(BaseConnector):
         success = resp_json.get('success', True)
         message = resp_json.get('message', 'None')
 
-        if (not success):
+        if not success:
             message = "Server returned Failure. Message: {0}".format(message)
             return RetVal(action_result.set_status(phantom.APP_ERROR, message))
 
@@ -167,7 +163,7 @@ class WigleConnector(BaseConnector):
         # make rest call
         ret_val, response = self._make_rest_call('/network/search', action_result, params={'ssid': ssid, 'resultsPerPage': 1})
 
-        if (phantom.is_fail(ret_val)):
+        if phantom.is_fail(ret_val):
             self.save_progress("Test Connectivity Failed.")
             return action_result.get_status()
 
@@ -185,13 +181,13 @@ class WigleConnector(BaseConnector):
         params = { 'ssid': param['name'] }
         params['resultsPerPage'] = param.get('max_results', 100)
 
-        if ('page_token' in param):
+        if 'page_token' in param:
             params['searchAfter'] = param['page_token']
 
         # make rest call
         ret_val, response = self._make_rest_call('/network/search', action_result, params=params)
 
-        if (phantom.is_fail(ret_val)):
+        if phantom.is_fail(ret_val):
             return action_result.get_status()
 
         summary['total_results'] = response.get('totalResults', 0)
@@ -282,7 +278,7 @@ if __name__ == '__main__':
         import getpass
         password = getpass.getpass("Password: ")
 
-    if (username and password):
+    if username and password:
         try:
             print ("Accessing the Login page")
             r = requests.get("https://127.0.0.1/login", verify=False)
@@ -312,7 +308,7 @@ if __name__ == '__main__':
         connector = WigleConnector()
         connector.print_progress_message = True
 
-        if (session_id is not None):
+        if session_id is not None:
             in_json['user_session_token'] = session_id
             connector._set_csrf_info(csrftoken, headers['Referer'])
 
