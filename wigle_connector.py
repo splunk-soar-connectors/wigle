@@ -15,14 +15,14 @@
 #
 #
 # Phantom App imports
-import phantom.app as phantom
-from phantom.base_connector import BaseConnector
-from phantom.action_result import ActionResult
-
-import requests
 import json
-from bs4 import BeautifulSoup
 import uuid
+
+import phantom.app as phantom
+import requests
+from bs4 import BeautifulSoup
+from phantom.action_result import ActionResult
+from phantom.base_connector import BaseConnector
 
 
 class RetVal(tuple):
@@ -264,8 +264,9 @@ class WigleConnector(BaseConnector):
 
 if __name__ == '__main__':
 
-    import pudb
     import argparse
+
+    import pudb
 
     pudb.set_trace()
 
