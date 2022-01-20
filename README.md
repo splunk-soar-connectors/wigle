@@ -2,7 +2,7 @@
 # WiGLE
 
 Publisher: Splunk  
-Connector Version: 2\.0\.2  
+Connector Version: 2\.0\.4  
 Product Vendor: WiGLE  
 Product Name: WiGLE  
 Product Version Supported (regex): "\.\*"  
