@@ -1,6 +1,6 @@
 # File: wigle_connector.py
 #
-# Copyright (c) 2018-2022 Splunk Inc.
+# Copyright (c) 2018-2024 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -185,6 +185,7 @@ class WigleConnector(BaseConnector):
 
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
+        self.debug_print("In action handle for", self.get_action_identifier())
         summary = action_result.update_summary({'total_results': 0})
 
         params = { 'ssid': param['name'] }
