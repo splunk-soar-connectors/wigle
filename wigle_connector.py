@@ -194,6 +194,7 @@ class WigleConnector(BaseConnector):
         if 'page_token' in param:
             params['searchAfter'] = param['page_token']
 
+        self.debug_print("Making rest call for lookup network")
         # make rest call
         ret_val, response = self._make_rest_call('/network/search', action_result, params=params)
 
