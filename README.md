@@ -1,9 +1,9 @@
 # WiGLE
 
-Publisher: Splunk \
-Connector Version: 2.0.7 \
-Product Vendor: WiGLE \
-Product Name: WiGLE \
+Publisher: Splunk <br>
+Connector Version: 2.0.7 <br>
+Product Vendor: WiGLE <br>
+Product Name: WiGLE <br>
 Minimum Product Version: 4.9.39220
 
 This app integrates with the WiGLE service to implement investigative actions
@@ -19,14 +19,14 @@ VARIABLE | REQUIRED | TYPE | DESCRIPTION
 
 ### Supported Actions
 
-[test connectivity](#action-test-connectivity) - Validate the asset configuration for connectivity \
+[test connectivity](#action-test-connectivity) - Validate the asset configuration for connectivity <br>
 [lookup network](#action-lookup-network) - Get info about a WiFi SSID
 
 ## action: 'test connectivity'
 
 Validate the asset configuration for connectivity
 
-Type: **test** \
+Type: **test** <br>
 Read only: **True**
 
 #### Action Parameters
@@ -41,7 +41,7 @@ No Output
 
 Get info about a WiFi SSID
 
-Type: **investigate** \
+Type: **investigate** <br>
 Read only: **True**
 
 #### Action Parameters
