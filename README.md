@@ -1,7 +1,7 @@
 # WiGLE
 
 Publisher: Splunk <br>
-Connector Version: 2.0.8 <br>
+Connector Version: 2.0.9 <br>
 Product Vendor: WiGLE <br>
 Product Name: WiGLE <br>
 Minimum Product Version: 4.9.39220
