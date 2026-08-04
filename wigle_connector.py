@@ -25,6 +25,9 @@ from phantom.action_result import ActionResult
 from phantom.base_connector import BaseConnector
 
 
+DEFAULT_REQUEST_TIMEOUT = 30
+
+
 class RetVal(tuple):
     def __new__(cls, val1, val2=None):
         return tuple.__new__(RetVal, (val1, val2))
@@ -153,6 +156,7 @@ class WigleConnector(BaseConnector):
                 data=data,
                 headers=headers,
                 params=params,
+                timeout=DEFAULT_REQUEST_TIMEOUT,
             )
         except Exception as e:
             return RetVal(action_result.set_status(phantom.APP_ERROR, f"Error Connecting to server. Details: {e!s}"), resp_json)
