@@ -83,6 +83,10 @@ class WigleConnector(BaseConnector):
         except Exception as e:
             return RetVal(action_result.set_status(phantom.APP_ERROR, f"Unable to parse JSON response. Error: {e!s}"), None)
 
+        if not isinstance(resp_json, dict):
+            message = f"Unexpected JSON response from server: expected an object, got {type(resp_json).__name__}"
+            return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
+
         success = resp_json.get("success", True)
         message = resp_json.get("message", "None")
 
