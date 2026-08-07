@@ -1,6 +1,6 @@
 # File: wigle_connector.py
 #
-# Copyright (c) 2018-2025 Splunk Inc.
+# Copyright (c) 2018-2026 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@ import requests
 from bs4 import BeautifulSoup
 from phantom.action_result import ActionResult
 from phantom.base_connector import BaseConnector
+
+
+DEFAULT_REQUEST_TIMEOUT = 30
 
 
 class RetVal(tuple):
@@ -82,6 +85,10 @@ class WigleConnector(BaseConnector):
             resp_json = r.json()
         except Exception as e:
             return RetVal(action_result.set_status(phantom.APP_ERROR, f"Unable to parse JSON response. Error: {e!s}"), None)
+
+        if not isinstance(resp_json, dict):
+            message = f"Unexpected JSON response from server: expected an object, got {type(resp_json).__name__}"
+            return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
 
         success = resp_json.get("success", True)
         message = resp_json.get("message", "None")
@@ -149,6 +156,7 @@ class WigleConnector(BaseConnector):
                 data=data,
                 headers=headers,
                 params=params,
+                timeout=DEFAULT_REQUEST_TIMEOUT,
             )
         except Exception as e:
             return RetVal(action_result.set_status(phantom.APP_ERROR, f"Error Connecting to server. Details: {e!s}"), resp_json)
@@ -163,7 +171,7 @@ class WigleConnector(BaseConnector):
         self.save_progress(f"Querying a randomly generated SSID name: {ssid} to test connectivity")
 
         # make rest call
-        ret_val, response = self._make_rest_call("/network/search", action_result, params={"ssid": ssid, "resultsPerPage": 1})
+        ret_val, _response = self._make_rest_call("/network/search", action_result, params={"ssid": ssid, "resultsPerPage": 1})
 
         if phantom.is_fail(ret_val):
             self.save_progress("Test Connectivity Failed")
