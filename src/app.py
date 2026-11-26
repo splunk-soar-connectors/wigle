@@ -17,7 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 from pydantic import ConfigDict
 from soar_sdk.abstract import SOARClient
-from soar_sdk.action_results import ActionOutput, OutputField
+from soar_sdk.action_results import ActionOutput, ActionResult, OutputField
 from soar_sdk.app import App
 from soar_sdk.asset import AssetField, BaseAsset
 from soar_sdk.exceptions import ActionFailure
@@ -109,7 +109,7 @@ def test_connectivity(soar: SOARClient, asset: Asset) -> None:
 
 class LookupNetworkParams(Params):
     name: str = Param(description="SSID", primary=True, cef_types=["ssid"])
-    max_results: float = Param(
+    max_results: int = Param(
         description="Max results per page (default is 100)", default=100, required=False
     )
     page_token: str | None = Param(
@@ -180,15 +180,21 @@ class LookupNetworkSummary(VendorOutput):
     read_only=True,
     render_as="table",
     summary_type=LookupNetworkSummary,
+    output_class=LookupNetworkOutput,
 )
-def lookup_network(
-    params: LookupNetworkParams, soar: SOARClient, asset: Asset
-) -> list[LookupNetworkOutput]:
+def lookup_network(params: LookupNetworkParams, soar: SOARClient, asset: Asset):
     query = {"ssid": params.name, "resultsPerPage": params.max_results}
     if params.page_token is not None:
         query["searchAfter"] = params.page_token
     soar.set_summary(LookupNetworkSummary.model_construct(total_results=0))
-    response = search_network(asset, query)
+    try:
+        response = search_network(asset, query)
+    except ActionFailure as exc:
+        failure = ActionResult(
+            False, exc.message, param=params.model_dump(exclude_none=True)
+        )
+        failure.set_summary({"total_results": 0})
+        return failure
     summary = {"total_results": response.get("totalResults", 0)}
     for source, target in [
         ("search_after", "next_page_token"),

@@ -174,3 +174,27 @@ def test_sdk_decorated_connectivity_success(asset, request_mock, monkeypatch):
 def test_output_preserves_explicit_null_and_extra_fields():
     output = module.LookupNetworkOutput.model_construct(ssid=None, vendor_field="value")
     assert output.model_dump() == {"ssid": None, "vendor_field": "value"}
+
+
+@pytest.mark.parametrize("maximum", [1, 25, 100])
+def test_explicit_page_size_uses_integer_wire_value(asset, request_mock, maximum):
+    request_mock.return_value = response({"results": []})
+    module.lookup_network.__wrapped__(
+        module.LookupNetworkParams(name="Example", max_results=maximum), Mock(), asset
+    )
+    query = request_mock.call_args.kwargs["params"]
+    prepared = requests.Request(
+        "GET", request_mock.call_args.args[0], params=query
+    ).prepare()
+    assert prepared.url.endswith(f"resultsPerPage={maximum}")
+    assert isinstance(query["resultsPerPage"], int)
+
+
+def test_sdk_failed_lookup_keeps_legacy_summary(asset, request_mock, monkeypatch):
+    monkeypatch.setattr(module.app, "_asset", asset, raising=False)
+    request_mock.return_value = response({"success": False, "message": "denied"})
+    assert module.lookup_network(module.LookupNetworkParams(name="Example")) is False
+    result = module.app.actions_manager.get_results()[-1]
+    assert result.get_summary() == {"total_results": 0}
+    assert result.get_param() == {"name": "Example", "max_results": 100}
+    assert result.get_message() == "Server returned Failure. Message: denied"
