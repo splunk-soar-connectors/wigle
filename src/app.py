@@ -93,7 +93,8 @@ class LookupNetworkParams(Params):
 
 class LookupNetworkOutput(ActionOutput):
     # WiGLE may return numbers for string fields (e.g. postal codes); keep them as strings.
-    model_config = ConfigDict(coerce_numbers_to_str=True)
+    # extra="allow" keeps every key WiGLE returns in action_result.data, as the legacy app did.
+    model_config = ConfigDict(coerce_numbers_to_str=True, extra="allow")
 
     # Table columns, declared in the original manifest's column order.
     ssid: str | None = OutputField(

@@ -224,3 +224,37 @@ def test_lookup_network_through_sdk_wrapper(mocker, asset):
     assert result.get_data()[0]["ssid"] == "foobar"
     assert result.get_data()[0]["channel"] == 6
     assert result.get_summary()["total_results"] == 1
+
+
+def test_lookup_network_keeps_undeclared_result_fields(mocker, asset):
+    """Keys WiGLE returns that the output model does not declare must still reach action_result.data."""
+    mocker.patch.object(
+        wigle_app,
+        "make_rest_call",
+        return_value={
+            "success": True,
+            "totalResults": 1,
+            "results": [
+                {
+                    "ssid": "foo",
+                    "netid": "AA:BB",
+                    "rcois": "506F9A",
+                    "locationData": [{"alt": 1}],
+                }
+            ],
+        },
+    )
+    mocker.patch.object(
+        wigle_app.app,
+        "_build_magic_args",
+        side_effect=lambda fn, soar, **kw: {"soar": soar, "asset": asset},
+    )
+    added = mocker.patch.object(wigle_app.app.actions_manager, "add_result")
+
+    assert wigle_app.lookup_network(wigle_app.LookupNetworkParams(name="foo")) is True
+
+    data = added.call_args.args[0].get_data()[0]
+    assert data["ssid"] == "foo"
+    assert data["netid"] == "AA:BB"
+    assert data["rcois"] == "506F9A"
+    assert data["locationData"] == [{"alt": 1}]
