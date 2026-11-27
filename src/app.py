@@ -78,6 +78,10 @@ def test_connectivity(soar: SOARClient, asset: Asset) -> None:
 
 
 class LookupNetworkParams(Params):
+    # page_token is often chained from a numeric WiGLE cursor (the legacy app's numeric
+    # summary.next_page_token, or the API's int64 "search_after"); accept it as a string.
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     name: str = Param(
         description="SSID", required=True, primary=True, cef_types=["ssid"]
     )

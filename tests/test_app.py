@@ -394,3 +394,16 @@ def test_make_request_connection_error(mocker, asset):
         ActionFailure, match=r"Error Connecting to server\. Details: down"
     ):
         make_request_module.make_request(_mr_params(), asset)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [(66141758487, "66141758487"), ("abc", "abc")]
+)
+def test_lookup_network_accepts_numeric_page_token(raw, expected):
+    """Platform/app-tests may send the chained cursor as a number."""
+    params_class = wigle_app.lookup_network.params_class
+    validated = params_class.model_validate(
+        {"name": "foo", "page_token": raw, "max_results": 100}
+    )
+    assert validated.page_token == expected
+    assert validated.max_results == 100
