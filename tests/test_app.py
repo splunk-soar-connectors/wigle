@@ -16,7 +16,7 @@ import pytest
 import requests
 from soar_sdk.exceptions import ActionFailure
 
-from src import app as wigle_app, helper
+from src import app as wigle_app, helper, make_request as make_request_module
 
 
 def _response(
@@ -258,3 +258,139 @@ def test_lookup_network_keeps_undeclared_result_fields(mocker, asset):
     assert data["netid"] == "AA:BB"
     assert data["rcois"] == "506F9A"
     assert data["locationData"] == [{"alt": 1}]
+
+
+def test_lookup_network_declares_documented_fields(mocker, soar, asset):
+    mocker.patch.object(
+        wigle_app,
+        "make_rest_call",
+        return_value={
+            "success": True,
+            "totalResults": 1,
+            "searchAfter": "cursor-1",
+            "results": [{"ssid": "foo", "frequency": 2412, "rcois": "506F9A"}],
+        },
+    )
+    results = wigle_app.lookup_network.__wrapped__(
+        wigle_app.LookupNetworkParams(name="foo"), soar=soar, asset=asset
+    )
+    assert results[0].frequency == 2412
+    assert results[0].rcois == "506F9A"
+    # "searchAfter" is used when the legacy "search_after" key is absent
+    assert soar.set_summary.call_args.args[0].next_page_token == "cursor-1"
+
+
+def test_output_model_covers_wigle_wifi_network_schema():
+    documented = {
+        "trilat", "trilong", "ssid", "qos", "transid", "firsttime", "lasttime", "lastupdt", "netid", "name", "type", "comment", "wep",
+        "bcninterval", "freenet", "dhcp", "paynet", "userfound", "channel", "frequency", "rcois", "encryption", "road", "city",
+        "housenumber", "postalcode", "country", "region",
+    }  # fmt: skip
+    assert documented <= set(wigle_app.LookupNetworkOutput.model_fields)
+
+
+def _mr_params(**overrides):
+    values = {"http_method": "GET", "endpoint": "/api/v2/network/detail"}
+    values.update(overrides)
+    return make_request_module.MakeRequestParams(**values)
+
+
+def test_make_request_success(mocker, asset):
+    req = mocker.patch.object(
+        make_request_module.requests,
+        "request",
+        return_value=_response(text='{"success": true}'),
+    )
+
+    output = make_request_module.make_request(
+        _mr_params(
+            endpoint="api/v3/detail/wifi/AA:BB",
+            headers='{"X-Test": "1", "Authorization": "Bearer evil"}',
+            query_parameters='{"netid": "AA:BB"}',
+            body='{"comment": "hi"}',
+            http_method="POST",
+            timeout=5,
+        ),
+        asset,
+    )
+
+    assert output.status_code == 200
+    assert output.response_body == '{"success": true}'
+    args, kwargs = req.call_args
+    assert args == ("POST", "https://api.wigle.net/api/v3/detail/wifi/AA:BB")
+    assert kwargs["auth"] == ("name", "token")
+    assert kwargs["headers"] == {"X-Test": "1"}
+    assert kwargs["params"] == {"netid": "AA:BB"}
+    assert kwargs["json"] == {"comment": "hi"}
+    assert kwargs["timeout"] == 5
+
+
+def test_make_request_query_string_and_raw_body(mocker, asset):
+    req = mocker.patch.object(
+        make_request_module.requests, "request", return_value=_response()
+    )
+    make_request_module.make_request(
+        _mr_params(query_parameters="?a=1&b=2", body="not json"), asset
+    )
+    kwargs = req.call_args.kwargs
+    assert kwargs["params"] == "a=1&b=2"
+    assert kwargs["data"] == "not json"
+    assert kwargs["timeout"] == 30
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://evil.example.com/x",
+        "//evil.example.com/x",
+        "http://api.wigle.net/api/v2/x",
+        "",
+        "   ",
+    ],
+)
+def test_make_request_rejects_non_relative_endpoints(mocker, asset, endpoint):
+    req = mocker.patch.object(make_request_module.requests, "request")
+    with pytest.raises(ActionFailure, match="endpoint must be a path relative"):
+        make_request_module.make_request(_mr_params(endpoint=endpoint), asset)
+    req.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "match"),
+    [
+        ({"headers": "[1]"}, "headers parameter must be a JSON object"),
+        ({"headers": "{bad"}, "headers parameter must be a JSON object"),
+        ({"query_parameters": "[1, 2]"}, "query_parameters parameter"),
+        ({"timeout": 0}, "timeout parameter must be greater than zero"),
+    ],
+)
+def test_make_request_invalid_inputs(mocker, asset, overrides, match):
+    req = mocker.patch.object(make_request_module.requests, "request")
+    with pytest.raises(ActionFailure, match=match):
+        make_request_module.make_request(_mr_params(**overrides), asset)
+    req.assert_not_called()
+
+
+def test_make_request_http_error_redacts_token(mocker, asset):
+    mocker.patch.object(
+        make_request_module.requests,
+        "request",
+        return_value=_response(status_code=401, text="bad token token"),
+    )
+    with pytest.raises(
+        ActionFailure,
+        match=r"Status Code: 401 Data from server: bad \[REDACTED\] \[REDACTED\]",
+    ):
+        make_request_module.make_request(_mr_params(), asset)
+
+
+def test_make_request_connection_error(mocker, asset):
+    mocker.patch.object(
+        make_request_module.requests,
+        "request",
+        side_effect=requests.ConnectionError("down"),
+    )
+    with pytest.raises(
+        ActionFailure, match=r"Error Connecting to server\. Details: down"
+    ):
+        make_request_module.make_request(_mr_params(), asset)

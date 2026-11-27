@@ -10,7 +10,8 @@
 # the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-WIGLE_BASE_URL = "https://api.wigle.net/api/v2"
+WIGLE_HOST_URL = "https://api.wigle.net"
+WIGLE_BASE_URL = f"{WIGLE_HOST_URL}/api/v2"
 WIGLE_NETWORK_SEARCH_ENDPOINT = "/network/search"
 DEFAULT_REQUEST_TIMEOUT = 30
 DEFAULT_MAX_RESULTS = 100

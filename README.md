@@ -20,7 +20,8 @@ VARIABLE | REQUIRED | TYPE | DESCRIPTION
 ### Supported Actions
 
 [test connectivity](#action-test-connectivity) - Validate the asset configuration for connectivity. <br>
-[lookup network](#action-lookup-network) - Get info about a WiFi SSID
+[lookup network](#action-lookup-network) - Get info about a WiFi SSID <br>
+[make request](#action-make-request) - Make an HTTP request to any WiGLE API endpoint (v2 or v3) using the asset credentials.
 
 ## action: 'test connectivity'
 
@@ -94,11 +95,52 @@ action_result.data.\*.trilong | numeric | | 37.41586685 |
 action_result.data.\*.type | string | | infra |
 action_result.data.\*.userfound | boolean | | True False |
 action_result.data.\*.wep | string | | 2 |
+action_result.data.\*.frequency | numeric | | 2412 |
+action_result.data.\*.rcois | string | | 506F9A |
 action_result.summary.total_results | numeric | | 5 |
 action_result.summary.next_page_token | string | `page token` | 85872166 |
 action_result.summary.first | numeric | | 1 |
 action_result.summary.last | numeric | | 5 |
 action_result.summary.result_count | numeric | | 5 |
+summary.total_objects | numeric | | 1 |
+summary.total_objects_successful | numeric | | 1 |
+
+## action: 'make request'
+
+Make an HTTP request to any WiGLE API endpoint (v2 or v3) using the asset credentials.
+
+Type: **generic** <br>
+Read only: **False**
+
+'make request' action for the app. Used to handle arbitrary HTTP requests with the app's asset
+
+#### Action Parameters
+
+PARAMETER | REQUIRED | DESCRIPTION | TYPE | CONTAINS
+--------- | -------- | ----------- | ---- | --------
+**http_method** | required | The HTTP method to use for the request. | string | |
+**endpoint** | required | The endpoint to send the request to. | string | |
+**headers** | optional | The headers to send with the request (JSON object). An example is {'Content-Type': 'application/json'} | string | |
+**query_parameters** | optional | Parameters to append to the URL (JSON object or query string). An example is ?key=value&key2=value2 | string | |
+**body** | optional | The body to send with the request (JSON object). An example is {'key': 'value', 'key2': 'value2'} | string | |
+**timeout** | optional | The timeout for the request in seconds. | numeric | |
+**verify_ssl** | optional | Whether to verify the SSL certificate. Default is True. | boolean | |
+
+#### Action Output
+
+DATA PATH | TYPE | CONTAINS | EXAMPLE VALUES
+--------- | ---- | -------- | --------------
+action_result.status | string | | success failure |
+action_result.message | string | | |
+action_result.parameter.http_method | string | | |
+action_result.parameter.endpoint | string | | |
+action_result.parameter.headers | string | | |
+action_result.parameter.query_parameters | string | | |
+action_result.parameter.body | string | | |
+action_result.parameter.timeout | numeric | | |
+action_result.parameter.verify_ssl | boolean | | |
+action_result.data.\*.status_code | numeric | | 200 404 500 |
+action_result.data.\*.response_body | string | | {"key": "value"} |
 summary.total_objects | numeric | | 1 |
 summary.total_objects_successful | numeric | | 1 |
 

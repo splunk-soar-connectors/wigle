@@ -23,6 +23,7 @@ from soar_sdk.params import Param, Params
 
 from .consts import DEFAULT_MAX_RESULTS, WIGLE_NETWORK_SEARCH_ENDPOINT
 from .helper import make_rest_call
+from .make_request import make_request
 
 
 logger = getLogger()
@@ -92,8 +93,9 @@ class LookupNetworkParams(Params):
 
 
 class LookupNetworkOutput(ActionOutput):
+    # Fields follow the WiFiNetwork schema in WiGLE's API spec (https://api.wigle.net/swagger.json).
     # WiGLE may return numbers for string fields (e.g. postal codes); keep them as strings.
-    # extra="allow" keeps every key WiGLE returns in action_result.data, as the legacy app did.
+    # extra="allow" still passes through any undocumented key WiGLE returns, as the legacy app did.
     model_config = ConfigDict(coerce_numbers_to_str=True, extra="allow")
 
     # Table columns, declared in the original manifest's column order.
@@ -130,6 +132,8 @@ class LookupNetworkOutput(ActionOutput):
     type: str | None = OutputField(example_values=["infra"])
     userfound: bool | None = OutputField(example_values=[True, False])
     wep: str | None = OutputField(example_values=["2"])
+    frequency: int | None = OutputField(example_values=[2412])
+    rcois: str | None = OutputField(example_values=["506F9A"])
 
 
 class LookupNetworkSummary(ActionOutput):
@@ -142,6 +146,12 @@ class LookupNetworkSummary(ActionOutput):
     first: int | None = OutputField(example_values=[1])
     last: int | None = OutputField(example_values=[5])
     result_count: int | None = OutputField(example_values=[5])
+
+
+def _next_page_token(response: dict) -> str | int | None:
+    # The legacy app read "search_after"; WiGLE also documents a string "searchAfter" cursor.
+    token = response.get("search_after")
+    return token if token is not None else response.get("searchAfter")
 
 
 def _summary_message(summary: LookupNetworkSummary) -> str:
@@ -188,7 +198,7 @@ def lookup_network(
 
     summary = LookupNetworkSummary(
         total_results=response.get("totalResults") or 0,
-        next_page_token=response.get("search_after"),
+        next_page_token=_next_page_token(response),
         first=response.get("first"),
         last=response.get("last"),
         result_count=response.get("resultCount"),
@@ -198,6 +208,9 @@ def lookup_network(
 
     results = response.get("results") or []
     return [LookupNetworkOutput(**item) for item in results if isinstance(item, dict)]
+
+
+app.make_request()(make_request)
 
 
 if __name__ == "__main__":
