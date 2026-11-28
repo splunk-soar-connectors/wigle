@@ -15,14 +15,17 @@ import uuid
 
 import requests
 from bs4 import BeautifulSoup
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 from soar_sdk.abstract import SOARClient
 from soar_sdk.action_results import ActionOutput, ActionResult, OutputField
 from soar_sdk.app import App
 from soar_sdk.asset import AssetField, BaseAsset
 from soar_sdk.exceptions import ActionFailure
+from soar_sdk.logging import info
 from soar_sdk.params import Param, Params
-from soar_sdk.logging import progress
+
+
+MAX_COMMERCIAL_PAGE_SIZE = 1000
 
 
 class Asset(BaseAsset):
@@ -81,12 +84,15 @@ def search_network(asset: Asset, params: dict) -> dict:
             f"Error from server. Status Code: {response.status_code} Data from server: {response.text}"
         )
     if "html" in content_type:
-        soup = BeautifulSoup(response.text, "html.parser")
-        for element in soup(["script", "style", "footer", "nav"]):
-            element.extract()
-        error_text = "\n".join(
-            line.strip() for line in soup.text.split("\n") if line.strip()
-        )
+        try:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for element in soup(["script", "style", "footer", "nav"]):
+                element.extract()
+            error_text = "\n".join(
+                line.strip() for line in soup.text.split("\n") if line.strip()
+            )
+        except Exception:
+            error_text = "Cannot parse error details"
         raise ActionFailure(
             f"Status Code: {response.status_code}. Data from server:\n{error_text}\n"
         )
@@ -102,15 +108,22 @@ def search_network(asset: Asset, params: dict) -> dict:
 @app.test_connectivity()
 def test_connectivity(soar: SOARClient, asset: Asset) -> None:
     ssid = str(uuid.uuid4())[:8]
-    progress(f"Querying a randomly generated SSID name: {ssid} to test connectivity")
-    search_network(asset, {"ssid": ssid, "resultsPerPage": 1})
-    progress("Test Connectivity Passed")
+    # The SDK writes info-level progress to persistent SOAR action history.
+    info(f"Querying a randomly generated SSID name: {ssid} to test connectivity")
+    try:
+        search_network(asset, {"ssid": ssid, "resultsPerPage": 1})
+    except ActionFailure:
+        info("Test Connectivity Failed")
+        raise
+    info("Test Connectivity Passed")
 
 
 class LookupNetworkParams(Params):
     name: str = Param(description="SSID", primary=True, cef_types=["ssid"])
     max_results: int = Param(
-        description="Max results per page (default is 100)", default=100, required=False
+        description="Max results per page (default 100, maximum 100 for standard API and 1000 for COMMAPI)",
+        default=100,
+        required=False,
     )
     page_token: str | None = Param(
         description="Page Token (Should be empty to get the 1st page)",
@@ -118,6 +131,13 @@ class LookupNetworkParams(Params):
         cef_types=["page token"],
         default=None,
     )
+
+    @field_validator("page_token", mode="before")
+    @classmethod
+    def accept_legacy_numeric_cursor(cls, value: object) -> object:
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
+        return value
 
 
 class VendorOutput(ActionOutput):
@@ -165,11 +185,17 @@ class LookupNetworkOutput(VendorOutput):
 class LookupNetworkSummary(VendorOutput):
     first: float = OutputField(example_values=[1])
     last: float = OutputField(example_values=[5])
-    next_page_token: float = OutputField(
-        cef_types=["page token"], example_values=[85872166]
+    next_page_token: str | None = OutputField(
+        cef_types=["page token"], example_values=["85872166"]
     )
     result_count: float = OutputField(example_values=[5])
     total_results: float = OutputField(example_values=[5])
+
+
+def failed_lookup(params: LookupNetworkParams, message: str) -> ActionResult:
+    result = ActionResult(False, message, param=params.model_dump(exclude_none=True))
+    result.set_summary({"total_results": 0})
+    return result
 
 
 @app.action(
@@ -183,21 +209,34 @@ class LookupNetworkSummary(VendorOutput):
     output_class=LookupNetworkOutput,
 )
 def lookup_network(params: LookupNetworkParams, soar: SOARClient, asset: Asset):
+    if not 1 <= params.max_results <= MAX_COMMERCIAL_PAGE_SIZE:
+        return failed_lookup(
+            params, f"max_results must be between 1 and {MAX_COMMERCIAL_PAGE_SIZE}"
+        )
+
     query = {"ssid": params.name, "resultsPerPage": params.max_results}
     if params.page_token is not None:
         query["searchAfter"] = params.page_token
-    soar.set_summary(LookupNetworkSummary.model_construct(total_results=0))
     try:
         response = search_network(asset, query)
     except ActionFailure as exc:
-        failure = ActionResult(
-            False, exc.message, param=params.model_dump(exclude_none=True)
+        return failed_lookup(params, exc.message)
+
+    results = response.get("results", [])
+    if not isinstance(results, list) or any(
+        not isinstance(item, dict) for item in results
+    ):
+        return failed_lookup(
+            params, "Invalid WiGLE response: results must be an array of objects"
         )
-        failure.set_summary({"total_results": 0})
-        return failure
+
     summary = {"total_results": response.get("totalResults", 0)}
+    cursor = response.get("searchAfter")
+    if cursor is None:
+        cursor = response.get("search_after")
+    if cursor is not None:
+        summary["next_page_token"] = str(cursor)
     for source, target in [
-        ("search_after", "next_page_token"),
         ("first", "first"),
         ("last", "last"),
         ("resultCount", "result_count"),
@@ -211,10 +250,7 @@ def lookup_network(params: LookupNetworkParams, soar: SOARClient, asset: Asset):
             for key, value in summary.items()
         )
     )
-    return [
-        LookupNetworkOutput.model_construct(**item)
-        for item in response.get("results", [])
-    ]
+    return [LookupNetworkOutput.model_construct(**item) for item in results]
 
 
 if __name__ == "__main__":

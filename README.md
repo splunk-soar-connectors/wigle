@@ -56,7 +56,7 @@ Read only: **True**
 PARAMETER | REQUIRED | DESCRIPTION | TYPE | CONTAINS
 --------- | -------- | ----------- | ---- | --------
 **name** | required | SSID | string | `ssid` |
-**max_results** | optional | Max results per page (default is 100) | numeric | |
+**max_results** | optional | Max results per page (default 100, maximum 100 for standard API and 1000 for COMMAPI) | numeric | |
 **page_token** | optional | Page Token (Should be empty to get the 1st page) | string | `page token` |
 
 #### Action Output
@@ -96,7 +96,7 @@ action_result.data.\*.userfound | boolean | | True False |
 action_result.data.\*.wep | string | | 2 |
 action_result.summary.first | numeric | | 1 |
 action_result.summary.last | numeric | | 5 |
-action_result.summary.next_page_token | numeric | `page token` | 85872166 |
+action_result.summary.next_page_token | string | `page token` | 85872166 |
 action_result.summary.result_count | numeric | | 5 |
 action_result.summary.total_results | numeric | | 5 |
 summary.total_objects | numeric | | 1 |

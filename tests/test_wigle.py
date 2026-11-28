@@ -16,6 +16,7 @@ from unittest.mock import Mock
 
 import pytest
 import requests
+from soar_sdk import logging as sdk_logging
 from soar_sdk.exceptions import ActionFailure
 
 from src import app as module
@@ -69,11 +70,42 @@ def test_lookup_page_and_summary(asset, request_mock):
     assert [item.model_dump() for item in output] == [row]
     assert soar.set_summary.call_args.args[0].model_dump() == {
         "total_results": 5,
-        "next_page_token": 123,
+        "next_page_token": "123",
         "first": 1,
         "last": 1,
         "result_count": 1,
     }
+
+
+@pytest.mark.parametrize("extra_cursor", [{}, {"search_after": 123}])
+def test_lookup_replays_documented_cursor(
+    asset, request_mock, monkeypatch, extra_cursor
+):
+    monkeypatch.setattr(module.app, "_asset", asset, raising=False)
+    cursor = "opaque+/="
+    request_mock.return_value = response({"searchAfter": cursor, **extra_cursor})
+    assert module.lookup_network(module.LookupNetworkParams(name="Example")) is True
+    result = module.app.actions_manager.get_results()[-1]
+    next_token = result.get_summary()["next_page_token"]
+    assert next_token == cursor
+
+    request_mock.return_value = response({"results": []})
+    assert (
+        module.lookup_network(
+            module.LookupNetworkParams(name="Example", page_token=next_token)
+        )
+        is True
+    )
+    assert request_mock.call_args.kwargs["params"]["searchAfter"] == cursor
+
+
+def test_lookup_accepts_legacy_numeric_cursor(asset, request_mock):
+    request_mock.return_value = response({"results": []})
+    params = module.LookupNetworkParams.model_validate(
+        {"name": "Example", "page_token": 66141758487}
+    )
+    module.lookup_network.__wrapped__(params, Mock(), asset)
+    assert request_mock.call_args.kwargs["params"]["searchAfter"] == "66141758487"
 
 
 def test_first_page_empty_result(asset, request_mock):
@@ -93,7 +125,7 @@ def test_first_page_empty_result(asset, request_mock):
 
 
 def test_connectivity_random_query(asset, request_mock, monkeypatch):
-    monkeypatch.setattr(module, "progress", Mock())
+    monkeypatch.setattr(module, "info", Mock())
     request_mock.return_value = response({"success": True})
     module.test_connectivity.__wrapped__(Mock(), asset)
     query = request_mock.call_args.kwargs["params"]
@@ -129,6 +161,17 @@ def test_response_failures(asset, request_mock, body, status, content_type, erro
         module.search_network(asset, {})
 
 
+def test_html_error_parsing_fallback(asset, request_mock, monkeypatch):
+    request_mock.return_value = response("<html>Unavailable</html>", 502, "text/html")
+    monkeypatch.setattr(
+        module, "BeautifulSoup", Mock(side_effect=ValueError("parse error"))
+    )
+    with pytest.raises(
+        ActionFailure, match=r"(?s)Status Code: 502.*Cannot parse error details"
+    ):
+        module.search_network(asset, {})
+
+
 def test_invalid_json(asset, request_mock):
     request_mock.return_value = response("not json", 200, "text/plain")
     request_mock.return_value.headers["Content-Type"] = "application/json"
@@ -158,17 +201,25 @@ def test_sdk_decorated_lookup(asset, request_mock, monkeypatch):
     assert result.get_summary() == {"total_results": 0, "result_count": 1}
 
 
-def test_sdk_decorated_connectivity_failure(asset, request_mock, monkeypatch):
+@pytest.mark.parametrize("success,event", [(True, "Passed"), (False, "Failed")])
+def test_sdk_connectivity_persists_progress(
+    asset, request_mock, monkeypatch, success, event
+):
     monkeypatch.setattr(module.app, "_asset", asset, raising=False)
-    request_mock.return_value = response({"success": False, "message": "denied"})
-    assert module.test_connectivity({}) is False
-    assert "denied" in module.app.actions_manager.get_results()[-1].get_message()
-
-
-def test_sdk_decorated_connectivity_success(asset, request_mock, monkeypatch):
-    monkeypatch.setattr(module.app, "_asset", asset, raising=False)
-    request_mock.return_value = response({"success": True})
-    assert module.test_connectivity({}) is True
+    monkeypatch.setattr(sdk_logging, "get_product_version", lambda: "7.0.0")
+    ipc = Mock()
+    monkeypatch.setattr(sdk_logging, "ph_ipc", ipc)
+    request_mock.return_value = response({"success": success, "message": "denied"})
+    assert module.test_connectivity({}) is success
+    status_calls = [call.args for call in ipc.sendstatus.call_args_list]
+    assert len(status_calls) == 2
+    assert all(
+        args[0] == ipc.PH_STATUS_PROGRESS and args[2] is True for args in status_calls
+    )
+    assert "Querying a randomly generated SSID" in status_calls[0][1]
+    assert f"Test Connectivity {event}" in status_calls[1][1]
+    if not success:
+        assert "denied" in module.app.actions_manager.get_results()[-1].get_message()
 
 
 def test_output_preserves_explicit_null_and_extra_fields():
@@ -176,7 +227,7 @@ def test_output_preserves_explicit_null_and_extra_fields():
     assert output.model_dump() == {"ssid": None, "vendor_field": "value"}
 
 
-@pytest.mark.parametrize("maximum", [1, 25, 100])
+@pytest.mark.parametrize("maximum", [1, 25, 100, 101, 1000])
 def test_explicit_page_size_uses_integer_wire_value(asset, request_mock, maximum):
     request_mock.return_value = response({"results": []})
     module.lookup_network.__wrapped__(
@@ -188,6 +239,34 @@ def test_explicit_page_size_uses_integer_wire_value(asset, request_mock, maximum
     ).prepare()
     assert prepared.url.endswith(f"resultsPerPage={maximum}")
     assert isinstance(query["resultsPerPage"], int)
+
+
+@pytest.mark.parametrize("page_size", [-1, 0, 1001])
+def test_lookup_rejects_invalid_page_sizes(asset, request_mock, page_size):
+    result = module.lookup_network.__wrapped__(
+        module.LookupNetworkParams(name="Example", max_results=page_size), Mock(), asset
+    )
+    assert result.get_status() is False
+    assert "max_results must be between 1 and 1000" in result.get_message()
+    request_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "results", [{"ssid": "Example"}, [{"ssid": "Example"}, "bad"], None]
+)
+def test_lookup_fails_on_malformed_results(asset, request_mock, monkeypatch, results):
+    monkeypatch.setattr(module.app, "_asset", asset, raising=False)
+    request_mock.return_value = response({"results": results})
+    params = module.LookupNetworkParams(name="Example", max_results=10)
+    assert module.lookup_network(params) is False
+    result = module.app.actions_manager.get_results()[-1]
+    assert (
+        result.get_message()
+        == "Invalid WiGLE response: results must be an array of objects"
+    )
+    assert result.get_data() == []
+    assert result.get_param() == {"name": "Example", "max_results": 10}
+    assert result.get_summary() == {"total_results": 0}
 
 
 def test_sdk_failed_lookup_keeps_legacy_summary(asset, request_mock, monkeypatch):
